@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package gophkeeper.api.v1;
+
+option go_package = "gophkeeper/internal/server/grpc/pb;pb";
+
+// AuthService предоставляет методы аутентификации и авторизации.
+service AuthService {
+  // Register регистрирует нового пользователя.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Login выполняет аутентификацию пользователя.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  
+  // RefreshToken обновляет пару access/refresh токенов.
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  
+  // Logout завершает сессию пользователя.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}
+
+// RegisterRequest содержит данные для регистрации.
+message RegisterRequest {
+  // Логин пользователя (уникальный идентификатор).
+  string login = 1;
+  
+  // Пароль пользователя.
+  string password = 2;
+}
+
+// RegisterResponse содержит результат регистрации.
+message RegisterResponse {
+  // ID созданного пользователя.
+  string user_id = 1;
+  
+  // Access токен для авторизации запросов.
+  string access_token = 2;
+  
+  // Refresh токен для обновления access токена.
+  string refresh_token = 3;
+}
+
+// LoginRequest содержит учётные данные для входа.
+message LoginRequest {
+  // Логин пользователя.
+  string login = 1;
+  
+  // Пароль пользователя.
+  string password = 2;
+}
+
+// LoginResponse содержит токены авторизации.
+message LoginResponse {
+  // ID пользователя.
+  string user_id = 1;
+  
+  // Access токен для авторизации запросов.
+  string access_token = 2;
+  
+  // Refresh токен для обновления access токена.
+  string refresh_token = 3;
+}
+
+// RefreshTokenRequest содержит refresh токен для обновления.
+message RefreshTokenRequest {
+  // Текущий refresh токен.
+  string refresh_token = 1;
+}
+
+// RefreshTokenResponse содержит новую пару токенов.
+message RefreshTokenResponse {
+  // Новый access токен.
+  string access_token = 1;
+  
+  // Новый refresh токен.
+  string refresh_token = 2;
+}
+
+// LogoutRequest содержит refresh токен для инвалидации.
+message LogoutRequest {
+  // Refresh токен для инвалидации.
+  string refresh_token = 1;
+}
+
+// LogoutResponse - пустой ответ при успешном выходе.
+message LogoutResponse {}
