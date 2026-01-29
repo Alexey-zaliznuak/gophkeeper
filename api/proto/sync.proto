@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package gophkeeper.api.v1;
+
+option go_package = "gophkeeper/internal/server/grpc/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+import "secrets.proto";
+
+// SyncService предоставляет методы для синхронизации данных.
+service SyncService {
+  // GetChanges возвращает изменения секретов с указанного времени.
+  rpc GetChanges(GetChangesRequest) returns (GetChangesResponse);
+  
+  // PushChanges отправляет локальные изменения на сервер.
+  rpc PushChanges(PushChangesRequest) returns (PushChangesResponse);
+}
+
+// GetChangesRequest содержит параметры запроса изменений.
+message GetChangesRequest {
+  // Время последней синхронизации (получить изменения после этого времени).
+  // Если не указано, возвращаются все секреты.
+  optional google.protobuf.Timestamp since = 1;
+}
+
+// GetChangesResponse содержит изменённые секреты.
+message GetChangesResponse {
+  // Список изменённых секретов.
+  repeated Secret secrets = 1;
+  
+  // Список ID удалённых секретов.
+  repeated string deleted_ids = 2;
+  
+  // Текущее серверное время (использовать как since в следующем запросе).
+  google.protobuf.Timestamp server_time = 3;
+}
+
+// SecretChange представляет изменение секрета от клиента.
+message SecretChange {
+  // Тип операции.
+  ChangeOperation operation = 1;
+  
+  // Данные секрета (для CREATE и UPDATE).
+  Secret secret = 2;
+  
+  // ID секрета (для DELETE).
+  string secret_id = 3;
+  
+  // Локальный временный ID (для новых секретов).
+  string client_id = 4;
+}
+
+// ChangeOperation определяет тип операции изменения.
+enum ChangeOperation {
+  // CHANGE_OPERATION_UNSPECIFIED - операция не указана.
+  CHANGE_OPERATION_UNSPECIFIED = 0;
+  
+  // CHANGE_OPERATION_CREATE - создание нового секрета.
+  CHANGE_OPERATION_CREATE = 1;
+  
+  // CHANGE_OPERATION_UPDATE - обновление существующего секрета.
+  CHANGE_OPERATION_UPDATE = 2;
+  
+  // CHANGE_OPERATION_DELETE - удаление секрета.
+  CHANGE_OPERATION_DELETE = 3;
+}
+
+// PushChangesRequest содержит локальные изменения для отправки.
+message PushChangesRequest {
+  // Список изменений.
+  repeated SecretChange changes = 1;
+}
+
+// ChangeResult представляет результат применения одного изменения.
+message ChangeResult {
+  // Локальный ID клиента (для сопоставления).
+  string client_id = 1;
+  
+  // Серверный ID секрета.
+  string server_id = 2;
+  
+  // Успешно ли применено изменение.
+  bool success = 3;
+  
+  // Сообщение об ошибке (если success = false).
+  string error_message = 4;
+  
+  // Конфликтующий секрет с сервера (если произошёл конфликт версий).
+  Secret conflict_secret = 5;
+}
+
+// PushChangesResponse содержит результаты применения изменений.
+message PushChangesResponse {
+  // Результаты для каждого изменения.
+  repeated ChangeResult results = 1;
+  
+  // Текущее серверное время.
+  google.protobuf.Timestamp server_time = 2;
+}

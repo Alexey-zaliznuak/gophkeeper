@@ -1,0 +1,44 @@
+# Бинарные файлы
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/cmd/server/server
+/cmd/client/client
+
+# Тестовые артефакты
+*.test
+coverage.out
+coverage.html
+
+# Зависимости
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS файлы
+.DS_Store
+Thumbs.db
+
+# Конфигурация с секретами
+.env
+.env.local
+*.pem
+*.key
+*.crt
+
+# Локальные данные клиента
+.gophkeeper/
+
+# Сгенерированный код protobuf
+*.pb.go
+
+# Логи
+*.log
