@@ -44,17 +44,6 @@ func (s *Service) Create(ctx context.Context, userID string, secret *model.Secre
 
 // Update обновляет существующий секрет с проверкой версии.
 func (s *Service) Update(ctx context.Context, userID string, secret *model.Secret, expectedVersion int64) (*model.Secret, error) {
-	// Проверяем, что секрет принадлежит пользователю
-	existing, err := s.secretRepo.GetByID(ctx, userID, secret.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Проверяем владельца
-	if existing.UserID != userID {
-		return nil, model.ErrAccessDenied
-	}
-
 	// Устанавливаем версию для оптимистичной блокировки
 	secret.UserID = userID
 	secret.Version = expectedVersion
@@ -88,17 +77,7 @@ func (s *Service) Delete(ctx context.Context, userID, secretID string) error {
 
 // Get возвращает секрет по ID.
 func (s *Service) Get(ctx context.Context, userID, secretID string) (*model.Secret, error) {
-	secret, err := s.secretRepo.GetByID(ctx, userID, secretID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Дополнительная проверка владельца
-	if secret.UserID != userID {
-		return nil, model.ErrAccessDenied
-	}
-
-	return secret, nil
+	return s.secretRepo.GetByID(ctx, userID, secretID)
 }
 
 // List возвращает все секреты пользователя.

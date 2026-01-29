@@ -62,12 +62,8 @@ func (m *mockSecretRepo) Update(ctx context.Context, secret *model.Secret) error
 
 func (m *mockSecretRepo) Delete(ctx context.Context, userID, secretID string) error {
 	secret, exists := m.secrets[secretID]
-	if !exists || secret.DeletedAt != nil {
+	if !exists || secret.DeletedAt != nil || secret.UserID != userID {
 		return model.ErrSecretNotFound
-	}
-
-	if secret.UserID != userID {
-		return model.ErrAccessDenied
 	}
 
 	now := time.Now()
@@ -77,12 +73,8 @@ func (m *mockSecretRepo) Delete(ctx context.Context, userID, secretID string) er
 
 func (m *mockSecretRepo) GetByID(ctx context.Context, userID, secretID string) (*model.Secret, error) {
 	secret, exists := m.secrets[secretID]
-	if !exists || secret.DeletedAt != nil {
+	if !exists || secret.DeletedAt != nil || secret.UserID != userID {
 		return nil, model.ErrSecretNotFound
-	}
-
-	if secret.UserID != userID {
-		return nil, model.ErrAccessDenied
 	}
 
 	return secret, nil
@@ -234,10 +226,10 @@ func TestService_Get_WrongUser(t *testing.T) {
 	}
 	created, _ := service.Create(ctx, "user-1", secret)
 
-	// Пытаемся получить от другого пользователя
+	// Пытаемся получить от другого пользователя — должен вернуть NotFound (не раскрывая существование секрета)
 	_, err := service.Get(ctx, "user-2", created.ID)
-	if err != model.ErrAccessDenied {
-		t.Errorf("Get() error = %v, want ErrAccessDenied", err)
+	if err != model.ErrSecretNotFound {
+		t.Errorf("Get() error = %v, want ErrSecretNotFound", err)
 	}
 }
 
