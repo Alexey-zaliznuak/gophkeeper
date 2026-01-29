@@ -12,7 +12,7 @@
 //	│                    Master Password                          │
 //	│              (вводится пользователем)                       │
 //	└─────────────────────┬───────────────────────────────────────┘
-//	                      │ PBKDF2
+//	                      │ Argon2id
 //	                      ▼
 //	┌─────────────────────────────────────────────────────────────┐
 //	│                  Master Key (32 bytes)                      │
@@ -34,7 +34,7 @@
 //
 // ## Алгоритмы
 //
-//   - Деривация ключа: PBKDF2-SHA256 (100,000 итераций)
+//   - Деривация ключа: Argon2id (64 MB, 1 итерация, 4 потока)
 //   - Шифрование: AES-256-GCM (Galois/Counter Mode)
 //   - Хеширование паролей (на сервере): bcrypt
 //
@@ -42,13 +42,13 @@
 //
 //	┌──────────┬─────────────────┬─────────────────┐
 //	│  Salt    │     Nonce       │   Ciphertext    │
-//	│ 32 bytes │    12 bytes     │   variable      │
+//	│ 16 bytes │    12 bytes     │   variable      │
 //	└──────────┴─────────────────┴─────────────────┘
 //
 // ## Процесс шифрования
 //
 //  1. Пользователь вводит мастер-пароль при первом входе
-//  2. Из пароля генерируется Master Key через PBKDF2
+//  2. Из пароля генерируется Master Key через Argon2id
 //  3. Генерируется случайный Data Key
 //  4. Data Key шифруется Master Key и сохраняется локально
 //  5. Все секреты шифруются Data Key перед отправкой на сервер
@@ -65,19 +65,18 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 
-	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/argon2"
 
 	"gophkeeper/internal/model"
 )
 
 const (
-	// saltSize размер соли для PBKDF2.
-	saltSize = 32
+	// saltSize размер соли для Argon2.
+	saltSize = 16
 
 	// nonceSize размер nonce для AES-GCM.
 	nonceSize = 12
@@ -85,8 +84,10 @@ const (
 	// keySize размер ключа AES-256.
 	keySize = 32
 
-	// pbkdf2Iterations количество итераций PBKDF2.
-	pbkdf2Iterations = 100000
+	// Параметры Argon2id.
+	argon2Time    = 1         // количество проходов по памяти
+	argon2Memory  = 64 * 1024 // 64 MB памяти
+	argon2Threads = 4         // количество потоков
 )
 
 // Encryptor обеспечивает шифрование и дешифрование данных.
@@ -99,7 +100,7 @@ func NewEncryptor(dataKey []byte) *Encryptor {
 	return &Encryptor{dataKey: dataKey}
 }
 
-// DeriveKeyFromPassword создаёт ключ шифрования из пароля используя PBKDF2.
+// DeriveKeyFromPassword создаёт ключ шифрования из пароля используя Argon2id.
 // Возвращает ключ и соль (соль нужна для повторной деривации).
 func DeriveKeyFromPassword(password string, salt []byte) ([]byte, []byte, error) {
 	// Генерируем соль если не передана
@@ -110,8 +111,8 @@ func DeriveKeyFromPassword(password string, salt []byte) ([]byte, []byte, error)
 		}
 	}
 
-	// Деривация ключа через PBKDF2
-	key := pbkdf2.Key([]byte(password), salt, pbkdf2Iterations, keySize, sha256.New)
+	// Деривация ключа через Argon2id
+	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, keySize)
 
 	return key, salt, nil
 }

@@ -206,33 +206,6 @@ func TestDecrypt_InvalidCiphertext(t *testing.T) {
 	}
 }
 
-func TestDeriveKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		password string
-	}{
-		{"simple", "password"},
-		{"empty", ""},
-		{"long", "verylongpasswordthatisusedforkeydervation"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			key := DeriveKey(tt.password)
-
-			if len(key) != 32 {
-				t.Errorf("DeriveKey() length = %d, want 32", len(key))
-			}
-
-			// Проверяем детерминированность
-			key2 := DeriveKey(tt.password)
-			if !bytes.Equal(key, key2) {
-				t.Error("DeriveKey() is not deterministic")
-			}
-		})
-	}
-}
-
 func TestGenerateRandomBytes(t *testing.T) {
 	tests := []struct {
 		name string

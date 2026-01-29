@@ -6,31 +6,86 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strings"
 
-	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/argon2"
 )
 
+// Параметры Argon2id для хеширования паролей.
 const (
-	// bcryptCost определяет сложность хеширования паролей.
-	bcryptCost = 12
+	argon2Time    = 1         // количество итераций
+	argon2Memory  = 64 * 1024 // 64 MB памяти
+	argon2Threads = 4         // количество потоков
+	argon2KeyLen  = 32        // длина хеша
+	argon2SaltLen = 16        // длина соли
 )
 
-// HashPassword хеширует пароль с использованием bcrypt.
+// HashPassword хеширует пароль с использованием Argon2id.
+// Возвращает хеш в формате PHC: $argon2id$v=19$m=65536,t=1,p=4$<salt>$<hash>
 func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
-	if err != nil {
-		return "", fmt.Errorf("failed to hash password: %w", err)
+	salt := make([]byte, argon2SaltLen)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return "", fmt.Errorf("failed to generate salt: %w", err)
 	}
-	return string(hash), nil
+
+	hash := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
+
+	// Формат PHC string
+	encoded := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version,
+		argon2Memory,
+		argon2Time,
+		argon2Threads,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(hash),
+	)
+
+	return encoded, nil
 }
 
-// CheckPassword проверяет соответствие пароля хешу.
-func CheckPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+// CheckPassword проверяет соответствие пароля хешу Argon2id.
+func CheckPassword(password, encodedHash string) bool {
+	// Парсим PHC string
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 {
+		return false
+	}
+
+	if parts[1] != "argon2id" {
+		return false
+	}
+
+	var version int
+	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
+		return false
+	}
+
+	var memory, time uint32
+	var threads uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
+		return false
+	}
+
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false
+	}
+
+	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false
+	}
+
+	// Вычисляем хеш с теми же параметрами
+	computedHash := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(expectedHash)))
+
+	// Сравнение с постоянным временем для защиты от timing attacks
+	return subtle.ConstantTimeCompare(expectedHash, computedHash) == 1
 }
 
 // HashToken создаёт SHA256 хеш токена для безопасного хранения.
@@ -93,13 +148,6 @@ func Decrypt(ciphertext, key []byte) ([]byte, error) {
 	}
 
 	return plaintext, nil
-}
-
-// DeriveKey создаёт 32-байтный ключ из пароля с использованием SHA256.
-// Для production рекомендуется использовать PBKDF2 или Argon2.
-func DeriveKey(password string) []byte {
-	hash := sha256.Sum256([]byte(password))
-	return hash[:]
 }
 
 // GenerateRandomBytes генерирует криптографически стойкие случайные байты.

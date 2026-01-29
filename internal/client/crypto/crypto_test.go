@@ -29,8 +29,8 @@ func TestDeriveKeyFromPassword(t *testing.T) {
 				t.Errorf("key length = %d, want 32", len(key))
 			}
 
-			if len(salt) != 32 {
-				t.Errorf("salt length = %d, want 32", len(salt))
+			if len(salt) != 16 {
+				t.Errorf("salt length = %d, want 16", len(salt))
 			}
 
 			// Проверяем воспроизводимость с той же солью
