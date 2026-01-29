@@ -47,9 +47,9 @@ func (h *SecretHandler) Create(ctx context.Context, req *pb.CreateSecretRequest)
 		return nil, mapSecretError(err)
 	}
 
-	return &pb.CreateSecretResponse{
+	return pb.CreateSecretResponse_builder{
 		Secret: secretToProto(created),
-	}, nil
+	}.Build(), nil
 }
 
 // Get возвращает секрет по ID.
@@ -68,9 +68,9 @@ func (h *SecretHandler) Get(ctx context.Context, req *pb.GetSecretRequest) (*pb.
 		return nil, mapSecretError(err)
 	}
 
-	return &pb.GetSecretResponse{
+	return pb.GetSecretResponse_builder{
 		Secret: secretToProto(secret),
-	}, nil
+	}.Build(), nil
 }
 
 // Update обновляет существующий секрет.
@@ -91,11 +91,11 @@ func (h *SecretHandler) Update(ctx context.Context, req *pb.UpdateSecretRequest)
 	}
 
 	// Обновляем только переданные поля
-	if req.Name != nil {
-		existing.Name = *req.Name
+	if req.HasName() {
+		existing.Name = req.GetName()
 	}
-	if req.EncryptedData != nil {
-		existing.EncryptedData = req.EncryptedData
+	if req.HasEncryptedData() {
+		existing.EncryptedData = req.GetEncryptedData()
 	}
 	if len(req.GetMetadata()) > 0 {
 		existing.Metadata = req.GetMetadata()
@@ -106,9 +106,9 @@ func (h *SecretHandler) Update(ctx context.Context, req *pb.UpdateSecretRequest)
 		return nil, mapSecretError(err)
 	}
 
-	return &pb.UpdateSecretResponse{
+	return pb.UpdateSecretResponse_builder{
 		Secret: secretToProto(updated),
-	}, nil
+	}.Build(), nil
 }
 
 // Delete удаляет секрет.
@@ -126,7 +126,7 @@ func (h *SecretHandler) Delete(ctx context.Context, req *pb.DeleteSecretRequest)
 		return nil, mapSecretError(err)
 	}
 
-	return &pb.DeleteSecretResponse{}, nil
+	return pb.DeleteSecretResponse_builder{}.Build(), nil
 }
 
 // List возвращает список всех секретов пользователя.
@@ -146,14 +146,14 @@ func (h *SecretHandler) List(ctx context.Context, req *pb.ListSecretsRequest) (*
 		protoSecrets[i] = secretToProto(s)
 	}
 
-	return &pb.ListSecretsResponse{
+	return pb.ListSecretsResponse_builder{
 		Secrets: protoSecrets,
-	}, nil
+	}.Build(), nil
 }
 
 // secretToProto преобразует модель секрета в proto.
 func secretToProto(s *model.Secret) *pb.Secret {
-	return &pb.Secret{
+	return pb.Secret_builder{
 		Id:            s.ID,
 		Name:          s.Name,
 		Type:          pb.SecretType(s.Type),
@@ -162,7 +162,7 @@ func secretToProto(s *model.Secret) *pb.Secret {
 		Version:       s.Version,
 		CreatedAt:     timestamppb.New(s.CreatedAt),
 		UpdatedAt:     timestamppb.New(s.UpdatedAt),
-	}
+	}.Build()
 }
 
 // mapSecretError преобразует ошибки секретов в gRPC статусы.

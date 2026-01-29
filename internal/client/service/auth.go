@@ -56,9 +56,9 @@ func (s *AuthService) Register(ctx context.Context, login, password, masterPassw
 
 	// Сохраняем сессию локально
 	session := &sqlite.Session{
-		UserID:        resp.UserId,
-		AccessToken:   resp.AccessToken,
-		RefreshToken:  resp.RefreshToken,
+		UserID:        resp.GetUserId(),
+		AccessToken:   resp.GetAccessToken(),
+		RefreshToken:  resp.GetRefreshToken(),
 		EncryptionKey: encryptionKey,
 	}
 
@@ -67,7 +67,7 @@ func (s *AuthService) Register(ctx context.Context, login, password, masterPassw
 	}
 
 	// Устанавливаем токен в клиент
-	s.client.SetAccessToken(resp.AccessToken)
+	s.client.SetAccessToken(resp.GetAccessToken())
 
 	return nil
 }
@@ -84,7 +84,7 @@ func (s *AuthService) Login(ctx context.Context, login, password, masterPassword
 	existingSession, err := s.storage.GetSession()
 	var encryptionKey []byte
 
-	if err == nil && existingSession.UserID == resp.UserId {
+	if err == nil && existingSession.UserID == resp.GetUserId() {
 		// Используем существующий ключ шифрования
 		encryptionKey = existingSession.EncryptionKey
 	} else {
@@ -109,9 +109,9 @@ func (s *AuthService) Login(ctx context.Context, login, password, masterPassword
 
 	// Сохраняем сессию
 	session := &sqlite.Session{
-		UserID:        resp.UserId,
-		AccessToken:   resp.AccessToken,
-		RefreshToken:  resp.RefreshToken,
+		UserID:        resp.GetUserId(),
+		AccessToken:   resp.GetAccessToken(),
+		RefreshToken:  resp.GetRefreshToken(),
 		EncryptionKey: encryptionKey,
 	}
 
@@ -119,7 +119,7 @@ func (s *AuthService) Login(ctx context.Context, login, password, masterPassword
 		return fmt.Errorf("failed to save session: %w", err)
 	}
 
-	s.client.SetAccessToken(resp.AccessToken)
+	s.client.SetAccessToken(resp.GetAccessToken())
 
 	return nil
 }
@@ -204,11 +204,11 @@ func (s *AuthService) RefreshToken(ctx context.Context) error {
 		return fmt.Errorf("failed to refresh token: %w", err)
 	}
 
-	if err := s.storage.UpdateTokens(resp.AccessToken, resp.RefreshToken); err != nil {
+	if err := s.storage.UpdateTokens(resp.GetAccessToken(), resp.GetRefreshToken()); err != nil {
 		return fmt.Errorf("failed to update tokens: %w", err)
 	}
 
-	s.client.SetAccessToken(resp.AccessToken)
+	s.client.SetAccessToken(resp.GetAccessToken())
 
 	return nil
 }

@@ -203,26 +203,26 @@ func (s *SecretService) Sync(ctx context.Context) error {
 	// 1. Получаем изменения с сервера
 	lastSync, _ := s.storage.GetLastSyncTime()
 
-	req := &pb.GetChangesRequest{}
+	reqBuilder := pb.GetChangesRequest_builder{}
 	if lastSync != nil {
-		req.Since = timestamppb.New(*lastSync)
+		reqBuilder.Since = timestamppb.New(*lastSync)
 	}
 
-	changes, err := s.client.GetChanges(ctx, req)
+	changes, err := s.client.GetChanges(ctx, reqBuilder.Build())
 	if err != nil {
 		return fmt.Errorf("failed to get changes: %w", err)
 	}
 
 	// 2. Применяем изменения с сервера
-	for _, secret := range changes.Secrets {
+	for _, secret := range changes.GetSecrets() {
 		localSecret := &sqlite.LocalSecret{
-			ID:            secret.Id,
-			ServerID:      secret.Id,
-			Name:          secret.Name,
-			Type:          model.SecretType(secret.Type),
-			EncryptedData: secret.EncryptedData,
-			Metadata:      secret.Metadata,
-			Version:       secret.Version,
+			ID:            secret.GetId(),
+			ServerID:      secret.GetId(),
+			Name:          secret.GetName(),
+			Type:          model.SecretType(secret.GetType()),
+			EncryptedData: secret.GetEncryptedData(),
+			Metadata:      secret.GetMetadata(),
+			Version:       secret.GetVersion(),
 			IsSynced:      true,
 		}
 
@@ -232,7 +232,7 @@ func (s *SecretService) Sync(ctx context.Context) error {
 	}
 
 	// 3. Удаляем локально удалённые на сервере
-	for _, deletedID := range changes.DeletedIds {
+	for _, deletedID := range changes.GetDeletedIds() {
 		_ = s.storage.DeleteByServerID(deletedID)
 	}
 
@@ -251,47 +251,47 @@ func (s *SecretService) Sync(ctx context.Context) error {
 				continue
 			}
 
-			change := &pb.SecretChange{
+			changeBuilder := pb.SecretChange_builder{
 				ClientId: item.SecretID,
 			}
 
 			switch item.Operation {
 			case "create":
-				change.Operation = pb.ChangeOperation_CHANGE_OPERATION_CREATE
-				change.Secret = &pb.Secret{
+				changeBuilder.Operation = pb.ChangeOperation_CHANGE_OPERATION_CREATE
+				changeBuilder.Secret = pb.Secret_builder{
 					Name:          secret.Name,
 					Type:          pb.SecretType(secret.Type),
 					EncryptedData: secret.EncryptedData,
 					Metadata:      secret.Metadata,
-				}
+				}.Build()
 			case "update":
-				change.Operation = pb.ChangeOperation_CHANGE_OPERATION_UPDATE
-				change.Secret = &pb.Secret{
+				changeBuilder.Operation = pb.ChangeOperation_CHANGE_OPERATION_UPDATE
+				changeBuilder.Secret = pb.Secret_builder{
 					Id:            secret.ServerID,
 					Name:          secret.Name,
 					Type:          pb.SecretType(secret.Type),
 					EncryptedData: secret.EncryptedData,
 					Metadata:      secret.Metadata,
 					Version:       secret.Version,
-				}
+				}.Build()
 			case "delete":
-				change.Operation = pb.ChangeOperation_CHANGE_OPERATION_DELETE
-				change.SecretId = item.SecretID
+				changeBuilder.Operation = pb.ChangeOperation_CHANGE_OPERATION_DELETE
+				changeBuilder.SecretId = item.SecretID
 			}
 
-			pushChanges = append(pushChanges, change)
+			pushChanges = append(pushChanges, changeBuilder.Build())
 		}
 
 		if len(pushChanges) > 0 {
-			resp, err := s.client.PushChanges(ctx, &pb.PushChangesRequest{Changes: pushChanges})
+			resp, err := s.client.PushChanges(ctx, pb.PushChangesRequest_builder{Changes: pushChanges}.Build())
 			if err != nil {
 				return fmt.Errorf("failed to push changes: %w", err)
 			}
 
 			// Обрабатываем результаты
-			for _, result := range resp.Results {
-				if result.Success {
-					_ = s.storage.MarkAsSynced(result.ClientId, result.ServerId)
+			for _, result := range resp.GetResults() {
+				if result.GetSuccess() {
+					_ = s.storage.MarkAsSynced(result.GetClientId(), result.GetServerId())
 				}
 			}
 		}
@@ -301,8 +301,8 @@ func (s *SecretService) Sync(ctx context.Context) error {
 	}
 
 	// 5. Сохраняем время синхронизации
-	if changes.ServerTime != nil {
-		_ = s.storage.SetLastSyncTime(changes.ServerTime.AsTime())
+	if changes.HasServerTime() {
+		_ = s.storage.SetLastSyncTime(changes.GetServerTime().AsTime())
 	}
 
 	return nil

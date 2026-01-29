@@ -34,11 +34,11 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		return nil, mapAuthError(err)
 	}
 
-	return &pb.RegisterResponse{
+	return pb.RegisterResponse_builder{
 		UserId:       user.ID,
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
-	}, nil
+	}.Build(), nil
 }
 
 // Login выполняет аутентификацию пользователя.
@@ -52,11 +52,11 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		return nil, mapAuthError(err)
 	}
 
-	return &pb.LoginResponse{
+	return pb.LoginResponse_builder{
 		UserId:       user.ID,
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
-	}, nil
+	}.Build(), nil
 }
 
 // RefreshToken обновляет пару токенов.
@@ -70,10 +70,10 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 		return nil, mapAuthError(err)
 	}
 
-	return &pb.RefreshTokenResponse{
+	return pb.RefreshTokenResponse_builder{
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
-	}, nil
+	}.Build(), nil
 }
 
 // Logout завершает сессию пользователя.
@@ -86,7 +86,7 @@ func (h *AuthHandler) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.Lo
 		return nil, mapAuthError(err)
 	}
 
-	return &pb.LogoutResponse{}, nil
+	return pb.LogoutResponse_builder{}.Build(), nil
 }
 
 // mapAuthError преобразует ошибки аутентификации в gRPC статусы.

@@ -70,6 +70,13 @@ func initApp() (*App, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
+	if cfg.TLSCertFile == "" {
+		fmt.Fprintln(os.Stderr, "WARNING: TLS is not configured! Connection is NOT encrypted.")
+		fmt.Fprintln(os.Stderr, "This is insecure and should only be used for development.")
+		fmt.Fprintln(os.Stderr, "Set GOPHKEEPER_TLS_CERT environment variable for production.")
+		fmt.Fprintln(os.Stderr, "")
+	}
+
 	storage, err := sqlite.New(cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init storage: %w", err)

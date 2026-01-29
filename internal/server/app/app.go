@@ -41,6 +41,12 @@ func Run(version, buildDate string) error {
 		zap.String("build_date", buildDate),
 	)
 
+	if cfg.TLSCertFile == "" || cfg.TLSKeyFile == "" {
+		log.Warn("WARNING: TLS is not configured! Server is running WITHOUT encryption. " +
+			"This is insecure and should only be used for development. " +
+			"Set GOPHKEEPER_TLS_CERT and GOPHKEEPER_TLS_KEY for production.")
+	}
+
 	// Контекст с отменой для graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

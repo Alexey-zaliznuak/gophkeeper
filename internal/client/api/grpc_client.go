@@ -95,10 +95,10 @@ func (c *Client) Register(ctx context.Context, login, password string) (*pb.Regi
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return c.authClient.Register(ctx, &pb.RegisterRequest{
+	return c.authClient.Register(ctx, pb.RegisterRequest_builder{
 		Login:    login,
 		Password: password,
-	})
+	}.Build())
 }
 
 // Login выполняет вход пользователя.
@@ -106,10 +106,10 @@ func (c *Client) Login(ctx context.Context, login, password string) (*pb.LoginRe
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return c.authClient.Login(ctx, &pb.LoginRequest{
+	return c.authClient.Login(ctx, pb.LoginRequest_builder{
 		Login:    login,
 		Password: password,
-	})
+	}.Build())
 }
 
 // RefreshToken обновляет пару токенов.
@@ -117,9 +117,9 @@ func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*pb.Ref
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return c.authClient.RefreshToken(ctx, &pb.RefreshTokenRequest{
+	return c.authClient.RefreshToken(ctx, pb.RefreshTokenRequest_builder{
 		RefreshToken: refreshToken,
-	})
+	}.Build())
 }
 
 // Logout выполняет выход пользователя.
@@ -127,9 +127,9 @@ func (c *Client) Logout(ctx context.Context, refreshToken string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	_, err := c.authClient.Logout(ctx, &pb.LogoutRequest{
+	_, err := c.authClient.Logout(ctx, pb.LogoutRequest_builder{
 		RefreshToken: refreshToken,
-	})
+	}.Build())
 	return err
 }
 
@@ -148,7 +148,7 @@ func (c *Client) GetSecret(ctx context.Context, id string) (*pb.GetSecretRespons
 	ctx, cancel := context.WithTimeout(c.authContext(ctx), 10*time.Second)
 	defer cancel()
 
-	return c.secretClient.Get(ctx, &pb.GetSecretRequest{Id: id})
+	return c.secretClient.Get(ctx, pb.GetSecretRequest_builder{Id: id}.Build())
 }
 
 // UpdateSecret обновляет секрет.
@@ -164,7 +164,7 @@ func (c *Client) DeleteSecret(ctx context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(c.authContext(ctx), 10*time.Second)
 	defer cancel()
 
-	_, err := c.secretClient.Delete(ctx, &pb.DeleteSecretRequest{Id: id})
+	_, err := c.secretClient.Delete(ctx, pb.DeleteSecretRequest_builder{Id: id}.Build())
 	return err
 }
 
@@ -173,7 +173,7 @@ func (c *Client) ListSecrets(ctx context.Context) (*pb.ListSecretsResponse, erro
 	ctx, cancel := context.WithTimeout(c.authContext(ctx), 30*time.Second)
 	defer cancel()
 
-	return c.secretClient.List(ctx, &pb.ListSecretsRequest{})
+	return c.secretClient.List(ctx, pb.ListSecretsRequest_builder{}.Build())
 }
 
 // ==================== Sync ====================

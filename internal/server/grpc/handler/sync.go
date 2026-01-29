@@ -30,14 +30,9 @@ func (h *SyncHandler) GetChanges(ctx context.Context, req *pb.GetChangesRequest)
 		return nil, err
 	}
 
-	var since *timestamppb.Timestamp
-	if req.Since != nil {
-		since = req.Since
-	}
-
 	var sinceTime *time.Time
-	if since != nil {
-		t := since.AsTime()
+	if req.HasSince() {
+		t := req.GetSince().AsTime()
 		sinceTime = &t
 	}
 
@@ -51,11 +46,11 @@ func (h *SyncHandler) GetChanges(ctx context.Context, req *pb.GetChangesRequest)
 		protoSecrets[i] = secretToProto(s)
 	}
 
-	return &pb.GetChangesResponse{
+	return pb.GetChangesResponse_builder{
 		Secrets:    protoSecrets,
 		DeletedIds: changes.DeletedIDs,
 		ServerTime: timestamppb.New(changes.ServerTime),
-	}, nil
+	}.Build(), nil
 }
 
 // PushChanges отправляет локальные изменения на сервер.
@@ -73,7 +68,7 @@ func (h *SyncHandler) PushChanges(ctx context.Context, req *pb.PushChangesReques
 			SecretID:  c.GetSecretId(),
 		}
 
-		if c.GetSecret() != nil {
+		if c.HasSecret() {
 			change.Secret = protoToSecret(c.GetSecret())
 		}
 
@@ -87,7 +82,7 @@ func (h *SyncHandler) PushChanges(ctx context.Context, req *pb.PushChangesReques
 
 	protoResults := make([]*pb.ChangeResult, len(results))
 	for i, r := range results {
-		protoResult := &pb.ChangeResult{
+		resultBuilder := pb.ChangeResult_builder{
 			ClientId:     r.ClientID,
 			ServerId:     r.ServerID,
 			Success:      r.Success,
@@ -95,16 +90,16 @@ func (h *SyncHandler) PushChanges(ctx context.Context, req *pb.PushChangesReques
 		}
 
 		if r.ConflictSecret != nil {
-			protoResult.ConflictSecret = secretToProto(r.ConflictSecret)
+			resultBuilder.ConflictSecret = secretToProto(r.ConflictSecret)
 		}
 
-		protoResults[i] = protoResult
+		protoResults[i] = resultBuilder.Build()
 	}
 
-	return &pb.PushChangesResponse{
+	return pb.PushChangesResponse_builder{
 		Results:    protoResults,
 		ServerTime: timestamppb.Now(),
-	}, nil
+	}.Build(), nil
 }
 
 // protoToSecret преобразует proto секрет в модель.
