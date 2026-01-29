@@ -4,8 +4,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"gophkeeper/internal/client/api"
 	"gophkeeper/internal/client/config"
@@ -109,6 +111,16 @@ func closeApp() error {
 	return nil
 }
 
+// readPassword читает пароль из терминала без отображения символов.
+func readPassword() (string, error) {
+	password, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", err
+	}
+	fmt.Println() // перевод строки после ввода пароля
+	return string(password), nil
+}
+
 // newVersionCmd создаёт команду для вывода версии.
 func newVersionCmd(version, buildDate string) *cobra.Command {
 	return &cobra.Command{
@@ -136,11 +148,19 @@ func newRegisterCmd() *cobra.Command {
 			}
 			if password == "" {
 				fmt.Print("Пароль: ")
-				fmt.Scanln(&password)
+				var err error
+				password, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения пароля: %w", err)
+				}
 			}
 			if masterPassword == "" {
 				fmt.Print("Мастер-пароль (для шифрования): ")
-				fmt.Scanln(&masterPassword)
+				var err error
+				masterPassword, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
+				}
 			}
 
 			if err := app.AuthService.Register(cmd.Context(), login, password, masterPassword); err != nil {
@@ -173,11 +193,19 @@ func newLoginCmd() *cobra.Command {
 			}
 			if password == "" {
 				fmt.Print("Пароль: ")
-				fmt.Scanln(&password)
+				var err error
+				password, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения пароля: %w", err)
+				}
 			}
 			if masterPassword == "" {
 				fmt.Print("Мастер-пароль: ")
-				fmt.Scanln(&masterPassword)
+				var err error
+				masterPassword, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
+				}
 			}
 
 			if err := app.AuthService.Login(cmd.Context(), login, password, masterPassword); err != nil {
@@ -225,7 +253,11 @@ func newSyncCmd() *cobra.Command {
 
 			if masterPassword == "" {
 				fmt.Print("Мастер-пароль: ")
-				fmt.Scanln(&masterPassword)
+				var err error
+				masterPassword, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
+				}
 			}
 
 			encryptor, err := app.AuthService.GetEncryptor(masterPassword)
@@ -269,8 +301,11 @@ func getMasterPassword(flagValue string) string {
 		return flagValue
 	}
 	fmt.Print("Мастер-пароль: ")
-	var password string
-	fmt.Scanln(&password)
+	password, err := readPassword()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Ошибка чтения пароля: %v\n", err)
+		return ""
+	}
 	return password
 }
 
@@ -303,7 +338,11 @@ func newCredentialsCmd() *cobra.Command {
 			}
 			if addPassword == "" {
 				fmt.Print("Пароль: ")
-				fmt.Scanln(&addPassword)
+				var err error
+				addPassword, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения пароля: %w", err)
+				}
 			}
 
 			creds := &model.CredentialsData{
@@ -734,7 +773,11 @@ func newCardCmd() *cobra.Command {
 			}
 			if addCVV == "" {
 				fmt.Print("CVV: ")
-				fmt.Scanln(&addCVV)
+				var err error
+				addCVV, err = readPassword()
+				if err != nil {
+					return fmt.Errorf("ошибка чтения CVV: %w", err)
+				}
 			}
 
 			card := &model.CardData{
