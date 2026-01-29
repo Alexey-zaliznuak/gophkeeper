@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"gophkeeper/internal/model"
 )
@@ -85,19 +87,9 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*model.U
 
 // isDuplicateKeyError проверяет, является ли ошибка нарушением уникальности.
 func isDuplicateKeyError(err error) bool {
-	// PostgreSQL error code 23505 = unique_violation
-	return err != nil && contains(err.Error(), "23505")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == pgerrcode.UniqueViolation
 	}
 	return false
 }
