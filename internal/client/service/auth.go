@@ -84,8 +84,24 @@ func (s *AuthService) Login(ctx context.Context, login, password, masterPassword
 	existingSession, err := s.storage.GetSession()
 	var encryptionKey []byte
 
-	if err == nil && existingSession.UserID == resp.GetUserId() {
-		// Используем существующий ключ шифрования
+	if err == nil && existingSession.UserID == resp.GetUserId() && len(existingSession.EncryptionKey) >= 16 {
+		// Есть существующая сессия — проверяем мастер-пароль
+		// Соль для Argon2id — 16 байт
+		salt := existingSession.EncryptionKey[:16]
+		encryptedDataKey := existingSession.EncryptionKey[16:]
+
+		masterKey, _, err := crypto.DeriveKeyFromPassword(masterPassword, salt)
+		if err != nil {
+			return fmt.Errorf("failed to derive master key: %w", err)
+		}
+
+		// Проверяем, что можем расшифровать ключ (проверка мастер-пароля)
+		_, err = crypto.DecryptDataKey(encryptedDataKey, masterKey)
+		if err != nil {
+			return fmt.Errorf("неверный мастер-пароль")
+		}
+
+		// Мастер-пароль верный, используем существующий ключ
 		encryptionKey = existingSession.EncryptionKey
 	} else {
 		// Новое устройство - нужно создать новый ключ
@@ -169,13 +185,13 @@ func (s *AuthService) GetEncryptor(masterPassword string) (*crypto.Encryptor, er
 		return nil, err
 	}
 
-	if len(session.EncryptionKey) < 32 {
+	if len(session.EncryptionKey) < 16 {
 		return nil, fmt.Errorf("invalid encryption key")
 	}
 
-	// Извлекаем соль (первые 32 байта)
-	salt := session.EncryptionKey[:32]
-	encryptedDataKey := session.EncryptionKey[32:]
+	// Извлекаем соль (первые 16 байт — размер соли Argon2id)
+	salt := session.EncryptionKey[:16]
+	encryptedDataKey := session.EncryptionKey[16:]
 
 	// Деривируем мастер-ключ
 	masterKey, _, err := crypto.DeriveKeyFromPassword(masterPassword, salt)
