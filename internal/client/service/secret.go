@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"gophkeeper/internal/client/api"
 	"gophkeeper/internal/client/crypto"
 	"gophkeeper/internal/client/storage/sqlite"
@@ -201,12 +203,12 @@ func (s *SecretService) Sync(ctx context.Context) error {
 	// 1. Получаем изменения с сервера
 	lastSync, _ := s.storage.GetLastSyncTime()
 
-	var req pb.GetChangesRequest
+	req := &pb.GetChangesRequest{}
 	if lastSync != nil {
-		// Используем timestamppb напрямую
+		req.Since = timestamppb.New(*lastSync)
 	}
 
-	changes, err := s.client.GetChanges(ctx, &req)
+	changes, err := s.client.GetChanges(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to get changes: %w", err)
 	}
