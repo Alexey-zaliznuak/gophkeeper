@@ -24,10 +24,10 @@ type App struct {
 	AuthService *service.AuthService
 }
 
-var app *App
-
 // NewRootCmd создаёт корневую команду CLI-клиента.
 func NewRootCmd(version, buildDate string) *cobra.Command {
+	var app *App
+
 	rootCmd := &cobra.Command{
 		Use:   "gophkeeper",
 		Short: "GophKeeper - безопасное хранение приватных данных",
@@ -40,46 +40,48 @@ func NewRootCmd(version, buildDate string) *cobra.Command {
 			if cmd.Name() == "version" {
 				return nil
 			}
-			return initApp()
+			var err error
+			app, err = initApp()
+			return err
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			return closeApp()
+			return closeApp(app)
 		},
 	}
 
 	// Добавление подкоманд
 	rootCmd.AddCommand(newVersionCmd(version, buildDate))
-	rootCmd.AddCommand(newRegisterCmd())
-	rootCmd.AddCommand(newLoginCmd())
-	rootCmd.AddCommand(newLogoutCmd())
-	rootCmd.AddCommand(newSyncCmd())
-	rootCmd.AddCommand(newCredentialsCmd())
-	rootCmd.AddCommand(newTextCmd())
-	rootCmd.AddCommand(newBinaryCmd())
-	rootCmd.AddCommand(newCardCmd())
+	rootCmd.AddCommand(newRegisterCmd(&app))
+	rootCmd.AddCommand(newLoginCmd(&app))
+	rootCmd.AddCommand(newLogoutCmd(&app))
+	rootCmd.AddCommand(newSyncCmd(&app))
+	rootCmd.AddCommand(newCredentialsCmd(&app))
+	rootCmd.AddCommand(newTextCmd(&app))
+	rootCmd.AddCommand(newBinaryCmd(&app))
+	rootCmd.AddCommand(newCardCmd(&app))
 
 	return rootCmd
 }
 
 // initApp инициализирует приложение.
-func initApp() error {
+func initApp() (*App, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	storage, err := sqlite.New(cfg.DataDir)
 	if err != nil {
-		return fmt.Errorf("failed to init storage: %w", err)
+		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
 
 	client, err := api.NewClient(cfg.ServerAddress, cfg.TLSCertFile)
 	if err != nil {
 		storage.Close()
-		return fmt.Errorf("failed to create client: %w", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
-	app = &App{
+	app := &App{
 		Config:      cfg,
 		Storage:     storage,
 		Client:      client,
@@ -91,11 +93,11 @@ func initApp() error {
 		client.SetAccessToken(session.AccessToken)
 	}
 
-	return nil
+	return app, nil
 }
 
 // closeApp закрывает ресурсы.
-func closeApp() error {
+func closeApp(app *App) error {
 	if app == nil {
 		return nil
 	}
@@ -135,7 +137,7 @@ func newVersionCmd(version, buildDate string) *cobra.Command {
 }
 
 // newRegisterCmd создаёт команду регистрации.
-func newRegisterCmd() *cobra.Command {
+func newRegisterCmd(app **App) *cobra.Command {
 	var login, password, masterPassword string
 
 	cmd := &cobra.Command{
@@ -163,7 +165,7 @@ func newRegisterCmd() *cobra.Command {
 				}
 			}
 
-			if err := app.AuthService.Register(cmd.Context(), login, password, masterPassword); err != nil {
+			if err := (*app).AuthService.Register(cmd.Context(), login, password, masterPassword); err != nil {
 				return err
 			}
 
@@ -180,7 +182,7 @@ func newRegisterCmd() *cobra.Command {
 }
 
 // newLoginCmd создаёт команду входа.
-func newLoginCmd() *cobra.Command {
+func newLoginCmd(app **App) *cobra.Command {
 	var login, password, masterPassword string
 
 	cmd := &cobra.Command{
@@ -208,7 +210,7 @@ func newLoginCmd() *cobra.Command {
 				}
 			}
 
-			if err := app.AuthService.Login(cmd.Context(), login, password, masterPassword); err != nil {
+			if err := (*app).AuthService.Login(cmd.Context(), login, password, masterPassword); err != nil {
 				return err
 			}
 
@@ -225,12 +227,12 @@ func newLoginCmd() *cobra.Command {
 }
 
 // newLogoutCmd создаёт команду выхода.
-func newLogoutCmd() *cobra.Command {
+func newLogoutCmd(app **App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Выход из системы",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := app.AuthService.Logout(cmd.Context()); err != nil {
+			if err := (*app).AuthService.Logout(cmd.Context()); err != nil {
 				return err
 			}
 			cmd.Println("Выход выполнен!")
@@ -240,14 +242,14 @@ func newLogoutCmd() *cobra.Command {
 }
 
 // newSyncCmd создаёт команду синхронизации.
-func newSyncCmd() *cobra.Command {
+func newSyncCmd(app **App) *cobra.Command {
 	var masterPassword string
 
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Синхронизировать данные с сервером",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !app.AuthService.IsLoggedIn() {
+			if !(*app).AuthService.IsLoggedIn() {
 				return fmt.Errorf("необходимо войти в систему")
 			}
 
@@ -260,12 +262,12 @@ func newSyncCmd() *cobra.Command {
 				}
 			}
 
-			encryptor, err := app.AuthService.GetEncryptor(masterPassword)
+			encryptor, err := (*app).AuthService.GetEncryptor(masterPassword)
 			if err != nil {
 				return fmt.Errorf("неверный мастер-пароль: %w", err)
 			}
 
-			secretService := service.NewSecretService(app.Client, app.Storage, encryptor)
+			secretService := service.NewSecretService((*app).Client, (*app).Storage, encryptor)
 
 			if err := secretService.Sync(cmd.Context()); err != nil {
 				return err
@@ -282,7 +284,7 @@ func newSyncCmd() *cobra.Command {
 }
 
 // requireAuth проверяет авторизацию и возвращает SecretService.
-func requireAuth(masterPassword string) (*service.SecretService, error) {
+func requireAuth(app *App, masterPassword string) (*service.SecretService, error) {
 	if !app.AuthService.IsLoggedIn() {
 		return nil, fmt.Errorf("необходимо войти в систему (gophkeeper login)")
 	}
@@ -310,7 +312,7 @@ func getMasterPassword(flagValue string) string {
 }
 
 // newCredentialsCmd создаёт группу команд для работы с логинами/паролями.
-func newCredentialsCmd() *cobra.Command {
+func newCredentialsCmd(app **App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "credentials",
 		Aliases: []string{"cred"},
@@ -323,7 +325,7 @@ func newCredentialsCmd() *cobra.Command {
 		Use:   "add",
 		Short: "Добавить новую пару логин/пароль",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
 			if err != nil {
 				return err
 			}
@@ -372,7 +374,7 @@ func newCredentialsCmd() *cobra.Command {
 		Use:   "list",
 		Short: "Показать список сохранённых учётных данных",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
 			if err != nil {
 				return err
 			}
@@ -408,7 +410,7 @@ func newCredentialsCmd() *cobra.Command {
 		Short: "Получить учётные данные по имени",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
 			if err != nil {
 				return err
 			}
@@ -443,7 +445,7 @@ func newCredentialsCmd() *cobra.Command {
 		Short: "Удалить учётные данные",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
 			if err != nil {
 				return err
 			}
@@ -463,7 +465,7 @@ func newCredentialsCmd() *cobra.Command {
 }
 
 // newTextCmd создаёт группу команд для работы с текстовыми данными.
-func newTextCmd() *cobra.Command {
+func newTextCmd(app **App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "text",
 		Short: "Управление текстовыми заметками",
@@ -475,7 +477,7 @@ func newTextCmd() *cobra.Command {
 		Use:   "add",
 		Short: "Добавить текстовую заметку",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
 			if err != nil {
 				return err
 			}
@@ -510,7 +512,7 @@ func newTextCmd() *cobra.Command {
 		Use:   "list",
 		Short: "Показать список заметок",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
 			if err != nil {
 				return err
 			}
@@ -546,7 +548,7 @@ func newTextCmd() *cobra.Command {
 		Short: "Получить заметку по имени",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
 			if err != nil {
 				return err
 			}
@@ -571,7 +573,7 @@ func newTextCmd() *cobra.Command {
 		Short: "Удалить заметку",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
 			if err != nil {
 				return err
 			}
@@ -591,7 +593,7 @@ func newTextCmd() *cobra.Command {
 }
 
 // newBinaryCmd создаёт группу команд для работы с бинарными данными.
-func newBinaryCmd() *cobra.Command {
+func newBinaryCmd(app **App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "binary",
 		Aliases: []string{"bin"},
@@ -605,7 +607,7 @@ func newBinaryCmd() *cobra.Command {
 		Short: "Добавить бинарный файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
 			if err != nil {
 				return err
 			}
@@ -643,7 +645,7 @@ func newBinaryCmd() *cobra.Command {
 		Use:   "list",
 		Short: "Показать список файлов",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
 			if err != nil {
 				return err
 			}
@@ -679,7 +681,7 @@ func newBinaryCmd() *cobra.Command {
 		Short: "Скачать файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
 			if err != nil {
 				return err
 			}
@@ -713,7 +715,7 @@ func newBinaryCmd() *cobra.Command {
 		Short: "Удалить файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
 			if err != nil {
 				return err
 			}
@@ -733,7 +735,7 @@ func newBinaryCmd() *cobra.Command {
 }
 
 // newCardCmd создаёт группу команд для работы с банковскими картами.
-func newCardCmd() *cobra.Command {
+func newCardCmd(app **App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "card",
 		Short: "Управление банковскими картами",
@@ -746,7 +748,7 @@ func newCardCmd() *cobra.Command {
 		Use:   "add",
 		Short: "Добавить банковскую карту",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
 			if err != nil {
 				return err
 			}
@@ -811,7 +813,7 @@ func newCardCmd() *cobra.Command {
 		Use:   "list",
 		Short: "Показать список карт",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
 			if err != nil {
 				return err
 			}
@@ -847,7 +849,7 @@ func newCardCmd() *cobra.Command {
 		Short: "Получить данные карты",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
 			if err != nil {
 				return err
 			}
@@ -875,7 +877,7 @@ func newCardCmd() *cobra.Command {
 		Short: "Удалить карту",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
 			if err != nil {
 				return err
 			}
