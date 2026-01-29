@@ -138,31 +138,24 @@ func newVersionCmd(version, buildDate string) *cobra.Command {
 
 // newRegisterCmd создаёт команду регистрации.
 func newRegisterCmd(app **App) *cobra.Command {
-	var login, password, masterPassword string
-
 	cmd := &cobra.Command{
 		Use:   "register",
 		Short: "Регистрация нового пользователя",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if login == "" {
-				fmt.Print("Логин: ")
-				fmt.Scanln(&login)
+			var login string
+			fmt.Print("Логин: ")
+			fmt.Scanln(&login)
+
+			fmt.Print("Пароль: ")
+			password, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения пароля: %w", err)
 			}
-			if password == "" {
-				fmt.Print("Пароль: ")
-				var err error
-				password, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения пароля: %w", err)
-				}
-			}
-			if masterPassword == "" {
-				fmt.Print("Мастер-пароль (для шифрования): ")
-				var err error
-				masterPassword, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
-				}
+
+			fmt.Print("Мастер-пароль (для шифрования): ")
+			masterPassword, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
 			}
 
 			if err := (*app).AuthService.Register(cmd.Context(), login, password, masterPassword); err != nil {
@@ -174,40 +167,29 @@ func newRegisterCmd(app **App) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&login, "login", "l", "", "Логин пользователя")
-	cmd.Flags().StringVarP(&password, "password", "p", "", "Пароль")
-	cmd.Flags().StringVarP(&masterPassword, "master", "m", "", "Мастер-пароль для шифрования")
-
 	return cmd
 }
 
 // newLoginCmd создаёт команду входа.
 func newLoginCmd(app **App) *cobra.Command {
-	var login, password, masterPassword string
-
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Вход в систему",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if login == "" {
-				fmt.Print("Логин: ")
-				fmt.Scanln(&login)
+			var login string
+			fmt.Print("Логин: ")
+			fmt.Scanln(&login)
+
+			fmt.Print("Пароль: ")
+			password, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения пароля: %w", err)
 			}
-			if password == "" {
-				fmt.Print("Пароль: ")
-				var err error
-				password, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения пароля: %w", err)
-				}
-			}
-			if masterPassword == "" {
-				fmt.Print("Мастер-пароль: ")
-				var err error
-				masterPassword, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
-				}
+
+			fmt.Print("Мастер-пароль: ")
+			masterPassword, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
 			}
 
 			if err := (*app).AuthService.Login(cmd.Context(), login, password, masterPassword); err != nil {
@@ -218,10 +200,6 @@ func newLoginCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVarP(&login, "login", "l", "", "Логин пользователя")
-	cmd.Flags().StringVarP(&password, "password", "p", "", "Пароль")
-	cmd.Flags().StringVarP(&masterPassword, "master", "m", "", "Мастер-пароль")
 
 	return cmd
 }
@@ -243,8 +221,6 @@ func newLogoutCmd(app **App) *cobra.Command {
 
 // newSyncCmd создаёт команду синхронизации.
 func newSyncCmd(app **App) *cobra.Command {
-	var masterPassword string
-
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Синхронизировать данные с сервером",
@@ -253,13 +229,10 @@ func newSyncCmd(app **App) *cobra.Command {
 				return fmt.Errorf("необходимо войти в систему")
 			}
 
-			if masterPassword == "" {
-				fmt.Print("Мастер-пароль: ")
-				var err error
-				masterPassword, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
-				}
+			fmt.Print("Мастер-пароль: ")
+			masterPassword, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения мастер-пароля: %w", err)
 			}
 
 			encryptor, err := (*app).AuthService.GetEncryptor(masterPassword)
@@ -278,8 +251,6 @@ func newSyncCmd(app **App) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&masterPassword, "master", "m", "", "Мастер-пароль")
-
 	return cmd
 }
 
@@ -297,11 +268,8 @@ func requireAuth(app *App, masterPassword string) (*service.SecretService, error
 	return service.NewSecretService(app.Client, app.Storage, encryptor), nil
 }
 
-// getMasterPassword запрашивает мастер-пароль.
-func getMasterPassword(flagValue string) string {
-	if flagValue != "" {
-		return flagValue
-	}
+// getMasterPassword запрашивает мастер-пароль интерактивно.
+func getMasterPassword() string {
 	fmt.Print("Мастер-пароль: ")
 	password, err := readPassword()
 	if err != nil {
@@ -320,12 +288,12 @@ func newCredentialsCmd(app **App) *cobra.Command {
 	}
 
 	// Add
-	var addLogin, addPassword, addURL, addMaster, addName string
+	var addURL, addName string
 	addCmd := &cobra.Command{
 		Use:   "add",
 		Short: "Добавить новую пару логин/пароль",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -334,17 +302,15 @@ func newCredentialsCmd(app **App) *cobra.Command {
 				fmt.Print("Название: ")
 				fmt.Scanln(&addName)
 			}
-			if addLogin == "" {
-				fmt.Print("Логин: ")
-				fmt.Scanln(&addLogin)
-			}
-			if addPassword == "" {
-				fmt.Print("Пароль: ")
-				var err error
-				addPassword, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения пароля: %w", err)
-				}
+
+			var addLogin string
+			fmt.Print("Логин: ")
+			fmt.Scanln(&addLogin)
+
+			fmt.Print("Пароль: ")
+			addPassword, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения пароля: %w", err)
 			}
 
 			creds := &model.CredentialsData{
@@ -362,19 +328,15 @@ func newCredentialsCmd(app **App) *cobra.Command {
 		},
 	}
 	addCmd.Flags().StringVarP(&addName, "name", "n", "", "Название записи")
-	addCmd.Flags().StringVarP(&addLogin, "login", "l", "", "Логин")
-	addCmd.Flags().StringVarP(&addPassword, "password", "p", "", "Пароль")
 	addCmd.Flags().StringVarP(&addURL, "url", "u", "", "URL сайта")
-	addCmd.Flags().StringVarP(&addMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(addCmd)
 
 	// List
-	var listMaster string
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "Показать список сохранённых учётных данных",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -400,17 +362,15 @@ func newCredentialsCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().StringVarP(&listMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(listCmd)
 
 	// Get
-	var getMaster string
 	getCmd := &cobra.Command{
 		Use:   "get [name]",
 		Short: "Получить учётные данные по имени",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -435,17 +395,15 @@ func newCredentialsCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	getCmd.Flags().StringVarP(&getMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(getCmd)
 
 	// Delete
-	var deleteMaster string
 	deleteCmd := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Удалить учётные данные",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -458,7 +416,6 @@ func newCredentialsCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	deleteCmd.Flags().StringVarP(&deleteMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(deleteCmd)
 
 	return cmd
@@ -472,12 +429,12 @@ func newTextCmd(app **App) *cobra.Command {
 	}
 
 	// Add
-	var addMaster, addName, addContent string
+	var addName, addContent string
 	addCmd := &cobra.Command{
 		Use:   "add",
 		Short: "Добавить текстовую заметку",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -503,16 +460,14 @@ func newTextCmd(app **App) *cobra.Command {
 	}
 	addCmd.Flags().StringVarP(&addName, "name", "n", "", "Название")
 	addCmd.Flags().StringVarP(&addContent, "content", "c", "", "Содержимое")
-	addCmd.Flags().StringVarP(&addMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(addCmd)
 
 	// List
-	var listMaster string
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "Показать список заметок",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -538,17 +493,15 @@ func newTextCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().StringVarP(&listMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(listCmd)
 
 	// Get
-	var getMaster string
 	getCmd := &cobra.Command{
 		Use:   "get [name]",
 		Short: "Получить заметку по имени",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -563,17 +516,15 @@ func newTextCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	getCmd.Flags().StringVarP(&getMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(getCmd)
 
 	// Delete
-	var deleteMaster string
 	deleteCmd := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Удалить заметку",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -586,7 +537,6 @@ func newTextCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	deleteCmd.Flags().StringVarP(&deleteMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(deleteCmd)
 
 	return cmd
@@ -601,13 +551,13 @@ func newBinaryCmd(app **App) *cobra.Command {
 	}
 
 	// Add
-	var addMaster, addName string
+	var addName string
 	addCmd := &cobra.Command{
 		Use:   "add [file]",
 		Short: "Добавить бинарный файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -636,16 +586,14 @@ func newBinaryCmd(app **App) *cobra.Command {
 		},
 	}
 	addCmd.Flags().StringVarP(&addName, "name", "n", "", "Название (по умолчанию имя файла)")
-	addCmd.Flags().StringVarP(&addMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(addCmd)
 
 	// List
-	var listMaster string
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "Показать список файлов",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -671,17 +619,16 @@ func newBinaryCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().StringVarP(&listMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(listCmd)
 
 	// Get
-	var getMaster, getOutput string
+	var getOutput string
 	getCmd := &cobra.Command{
 		Use:   "get [name]",
 		Short: "Скачать файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -705,17 +652,15 @@ func newBinaryCmd(app **App) *cobra.Command {
 		},
 	}
 	getCmd.Flags().StringVarP(&getOutput, "output", "o", "", "Путь для сохранения")
-	getCmd.Flags().StringVarP(&getMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(getCmd)
 
 	// Delete
-	var deleteMaster string
 	deleteCmd := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Удалить файл",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -728,7 +673,6 @@ func newBinaryCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	deleteCmd.Flags().StringVarP(&deleteMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(deleteCmd)
 
 	return cmd
@@ -742,13 +686,12 @@ func newCardCmd(app **App) *cobra.Command {
 	}
 
 	// Add
-	var addMaster, addName, addNumber, addHolder, addCVV string
-	var addMonth, addYear int
+	var addName string
 	addCmd := &cobra.Command{
 		Use:   "add",
 		Short: "Добавить банковскую карту",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(addMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -757,29 +700,27 @@ func newCardCmd(app **App) *cobra.Command {
 				fmt.Print("Название: ")
 				fmt.Scanln(&addName)
 			}
-			if addNumber == "" {
-				fmt.Print("Номер карты: ")
-				fmt.Scanln(&addNumber)
-			}
-			if addHolder == "" {
-				fmt.Print("Имя держателя: ")
-				fmt.Scanln(&addHolder)
-			}
-			if addMonth == 0 {
-				fmt.Print("Месяц (MM): ")
-				fmt.Scanln(&addMonth)
-			}
-			if addYear == 0 {
-				fmt.Print("Год (YYYY): ")
-				fmt.Scanln(&addYear)
-			}
-			if addCVV == "" {
-				fmt.Print("CVV: ")
-				var err error
-				addCVV, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("ошибка чтения CVV: %w", err)
-				}
+
+			var addNumber string
+			fmt.Print("Номер карты: ")
+			fmt.Scanln(&addNumber)
+
+			var addHolder string
+			fmt.Print("Имя держателя: ")
+			fmt.Scanln(&addHolder)
+
+			var addMonth int
+			fmt.Print("Месяц (MM): ")
+			fmt.Scanln(&addMonth)
+
+			var addYear int
+			fmt.Print("Год (YYYY): ")
+			fmt.Scanln(&addYear)
+
+			fmt.Print("CVV: ")
+			addCVV, err := readPassword()
+			if err != nil {
+				return fmt.Errorf("ошибка чтения CVV: %w", err)
 			}
 
 			card := &model.CardData{
@@ -799,21 +740,14 @@ func newCardCmd(app **App) *cobra.Command {
 		},
 	}
 	addCmd.Flags().StringVarP(&addName, "name", "n", "", "Название")
-	addCmd.Flags().StringVar(&addNumber, "number", "", "Номер карты")
-	addCmd.Flags().StringVar(&addHolder, "holder", "", "Имя держателя")
-	addCmd.Flags().IntVar(&addMonth, "month", 0, "Месяц окончания")
-	addCmd.Flags().IntVar(&addYear, "year", 0, "Год окончания")
-	addCmd.Flags().StringVar(&addCVV, "cvv", "", "CVV код")
-	addCmd.Flags().StringVarP(&addMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(addCmd)
 
 	// List
-	var listMaster string
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "Показать список карт",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(listMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -839,17 +773,15 @@ func newCardCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().StringVarP(&listMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(listCmd)
 
 	// Get
-	var getMaster string
 	getCmd := &cobra.Command{
 		Use:   "get [name]",
 		Short: "Получить данные карты",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(getMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -867,17 +799,15 @@ func newCardCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	getCmd.Flags().StringVarP(&getMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(getCmd)
 
 	// Delete
-	var deleteMaster string
 	deleteCmd := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Удалить карту",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			secretService, err := requireAuth(*app, getMasterPassword(deleteMaster))
+			secretService, err := requireAuth(*app, getMasterPassword())
 			if err != nil {
 				return err
 			}
@@ -890,7 +820,6 @@ func newCardCmd(app **App) *cobra.Command {
 			return nil
 		},
 	}
-	deleteCmd.Flags().StringVarP(&deleteMaster, "master", "m", "", "Мастер-пароль")
 	cmd.AddCommand(deleteCmd)
 
 	return cmd
