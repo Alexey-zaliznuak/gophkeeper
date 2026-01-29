@@ -197,6 +197,22 @@ func newLoginCmd(app **App) *cobra.Command {
 			}
 
 			cmd.Println("Вход выполнен!")
+
+			// Автоматическая синхронизация после входа
+			cmd.Println("Синхронизация данных...")
+
+			encryptor, err := (*app).AuthService.GetEncryptor(masterPassword)
+			if err != nil {
+				return fmt.Errorf("ошибка инициализации шифрования: %w", err)
+			}
+
+			secretService := service.NewSecretService((*app).Client, (*app).Storage, encryptor)
+			if err := secretService.Sync(cmd.Context()); err != nil {
+				cmd.PrintErrf("Предупреждение: не удалось синхронизировать данные: %v\n", err)
+				return nil // Не фейлим логин из-за ошибки синхронизации
+			}
+
+			cmd.Println("Синхронизация завершена!")
 			return nil
 		},
 	}
